@@ -11,6 +11,9 @@
   - name: BODY_TYPE_DYNAMIC
     type: number
     desc: Dynamic body type.
+  - name: UPSTREAM_COMMIT
+    type: string
+    desc: Exact upstream Box3D commit used by this extension.
   - name: get_version
     type: function
     desc: Returns Box3D version fields and the pinned upstream commit.
@@ -37,6 +40,17 @@
     - name: world
       type: userdata
       desc: World handle.
+  - name: is_world_valid
+    type: function
+    desc: Returns whether a world handle still refers to a live Box3D world.
+    parameters:
+    - name: world
+      type: userdata
+      desc: World handle.
+    returns:
+    - name: valid
+      type: boolean
+      desc: True when the world is valid.
   - name: step
     type: function
     desc: Advances a world simulation.
@@ -51,6 +65,27 @@
       type: number
       desc: Solver substep count, defaults to 4.
       optional: true
+  - name: set_gravity
+    type: function
+    desc: Sets the gravity vector for a world.
+    parameters:
+    - name: world
+      type: userdata
+      desc: World handle.
+    - name: gravity
+      type: vector3
+      desc: New gravity vector.
+  - name: get_gravity
+    type: function
+    desc: Gets the gravity vector for a world.
+    parameters:
+    - name: world
+      type: userdata
+      desc: World handle.
+    returns:
+    - name: gravity
+      type: vector3
+      desc: Current gravity vector.
   - name: create_body
     type: function
     desc: Creates a body from a definition table.
@@ -72,6 +107,17 @@
     - name: body
       type: userdata
       desc: Body handle.
+  - name: is_body_valid
+    type: function
+    desc: Returns whether a body handle still refers to a live Box3D body.
+    parameters:
+    - name: body
+      type: userdata
+      desc: Body handle.
+    returns:
+    - name: valid
+      type: boolean
+      desc: True when the body is valid.
   - name: create_box
     type: function
     desc: Attaches a box hull to a body.
@@ -128,6 +174,39 @@
     - name: shape
       type: userdata
       desc: Shape handle.
+  - name: destroy_shape
+    type: function
+    desc: Destroys a shape. Updating body mass defaults to true.
+    parameters:
+    - name: shape
+      type: userdata
+      desc: Shape handle.
+    - name: update_body_mass
+      type: boolean
+      desc: Whether to update the owning body's mass.
+      optional: true
+  - name: is_shape_valid
+    type: function
+    desc: Returns whether a shape handle still refers to a live Box3D shape.
+    parameters:
+    - name: shape
+      type: userdata
+      desc: Shape handle.
+    returns:
+    - name: valid
+      type: boolean
+      desc: True when the shape is valid.
+  - name: get_shape_body
+    type: function
+    desc: Gets the body that owns a shape.
+    parameters:
+    - name: shape
+      type: userdata
+      desc: Shape handle.
+    returns:
+    - name: body
+      type: userdata
+      desc: Owning body handle.
   - name: get_transform
     type: function
     desc: Gets body position and rotation.
@@ -155,6 +234,48 @@
     - name: rotation
       type: quaternion
       desc: World rotation.
+  - name: get_linear_velocity
+    type: function
+    desc: Gets a body's linear velocity.
+    parameters:
+    - name: body
+      type: userdata
+      desc: Body handle.
+    returns:
+    - name: velocity
+      type: vector3
+      desc: Linear velocity.
+  - name: set_linear_velocity
+    type: function
+    desc: Sets a body's linear velocity.
+    parameters:
+    - name: body
+      type: userdata
+      desc: Body handle.
+    - name: velocity
+      type: vector3
+      desc: Linear velocity.
+  - name: get_angular_velocity
+    type: function
+    desc: Gets a body's angular velocity.
+    parameters:
+    - name: body
+      type: userdata
+      desc: Body handle.
+    returns:
+    - name: velocity
+      type: vector3
+      desc: Angular velocity.
+  - name: set_angular_velocity
+    type: function
+    desc: Sets a body's angular velocity.
+    parameters:
+    - name: body
+      type: userdata
+      desc: Body handle.
+    - name: velocity
+      type: vector3
+      desc: Angular velocity.
   - name: apply_force
     type: function
     desc: Applies a world-space force at a point.
@@ -168,6 +289,34 @@
     - name: point
       type: vector3
       desc: World-space application point.
+    - name: wake
+      type: boolean
+      desc: Whether to wake the body, defaults to true.
+      optional: true
+  - name: apply_force_to_center
+    type: function
+    desc: Applies a world-space force at the body's center of mass.
+    parameters:
+    - name: body
+      type: userdata
+      desc: Body handle.
+    - name: force
+      type: vector3
+      desc: Force vector.
+    - name: wake
+      type: boolean
+      desc: Whether to wake the body, defaults to true.
+      optional: true
+  - name: apply_torque
+    type: function
+    desc: Applies torque to a body.
+    parameters:
+    - name: body
+      type: userdata
+      desc: Body handle.
+    - name: torque
+      type: vector3
+      desc: Torque vector.
     - name: wake
       type: boolean
       desc: Whether to wake the body, defaults to true.
@@ -189,6 +338,108 @@
       type: boolean
       desc: Whether to wake the body, defaults to true.
       optional: true
+  - name: apply_linear_impulse_to_center
+    type: function
+    desc: Applies an instantaneous linear impulse at the body's center of mass.
+    parameters:
+    - name: body
+      type: userdata
+      desc: Body handle.
+    - name: impulse
+      type: vector3
+      desc: Linear impulse vector.
+    - name: wake
+      type: boolean
+      desc: Whether to wake the body, defaults to true.
+      optional: true
+  - name: apply_angular_impulse
+    type: function
+    desc: Applies an instantaneous angular impulse to a body.
+    parameters:
+    - name: body
+      type: userdata
+      desc: Body handle.
+    - name: impulse
+      type: vector3
+      desc: Angular impulse vector.
+    - name: wake
+      type: boolean
+      desc: Whether to wake the body, defaults to true.
+      optional: true
+  - name: get_mass
+    type: function
+    desc: Gets a body's mass.
+    parameters:
+    - name: body
+      type: userdata
+      desc: Body handle.
+    returns:
+    - name: mass
+      type: number
+      desc: Body mass.
+  - name: is_awake
+    type: function
+    desc: Returns whether a body is awake.
+    parameters:
+    - name: body
+      type: userdata
+      desc: Body handle.
+    returns:
+    - name: awake
+      type: boolean
+      desc: True when the body is awake.
+  - name: set_awake
+    type: function
+    desc: Changes whether a body is awake.
+    parameters:
+    - name: body
+      type: userdata
+      desc: Body handle.
+    - name: awake
+      type: boolean
+      desc: Desired awake state.
+  - name: get_friction
+    type: function
+    desc: Gets a shape's friction coefficient.
+    parameters:
+    - name: shape
+      type: userdata
+      desc: Shape handle.
+    returns:
+    - name: friction
+      type: number
+      desc: Friction coefficient.
+  - name: set_friction
+    type: function
+    desc: Sets a shape's friction coefficient.
+    parameters:
+    - name: shape
+      type: userdata
+      desc: Shape handle.
+    - name: friction
+      type: number
+      desc: Finite non-negative friction coefficient.
+  - name: get_restitution
+    type: function
+    desc: Gets a shape's restitution coefficient.
+    parameters:
+    - name: shape
+      type: userdata
+      desc: Shape handle.
+    returns:
+    - name: restitution
+      type: number
+      desc: Restitution coefficient.
+  - name: set_restitution
+    type: function
+    desc: Sets a shape's restitution coefficient.
+    parameters:
+    - name: shape
+      type: userdata
+      desc: Shape handle.
+    - name: restitution
+      type: number
+      desc: Finite non-negative restitution coefficient.
   - name: explode
     type: function
     desc: Calls Box3D's geometry-aware radial explosion operation.

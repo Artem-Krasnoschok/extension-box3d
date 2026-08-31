@@ -1,6 +1,7 @@
 #include <dmsdk/sdk.h>
 #include <box3d/box3d.h>
 
+#include <limits.h>
 #include <stdint.h>
 #include <string.h>
 
@@ -41,6 +42,10 @@ static float GetNumberField(lua_State* L, int table_index, const char* name, flo
     table_index = AbsIndex(L, table_index);
     lua_getfield(L, table_index, name);
     float value = lua_isnil(L, -1) ? fallback : (float)luaL_checknumber(L, -1);
+    if (!b3IsValidFloat(value))
+    {
+        luaL_error(L, "%s must be a finite number", name);
+    }
     lua_pop(L, 1);
     return value;
 }
@@ -56,7 +61,7 @@ static uint64_t GetUInt64Field(lua_State* L, int table_index, const char* name, 
     }
 
     lua_Number number = luaL_checknumber(L, -1);
-    if (number < 0.0 || number > 9007199254740991.0)
+    if (!(number >= 0.0 && number <= 9007199254740991.0))
     {
         luaL_error(L, "%s must be an integer between 0 and 2^53 - 1", name);
     }
@@ -69,11 +74,32 @@ static uint64_t GetUInt64Field(lua_State* L, int table_index, const char* name, 
     return value;
 }
 
+static int CheckInteger(lua_State* L, int index, const char* name)
+{
+    lua_Number number = luaL_checknumber(L, index);
+    if (!(number >= (lua_Number)INT_MIN && number <= (lua_Number)INT_MAX))
+    {
+        luaL_error(L, "%s must be an integer in the supported range", name);
+    }
+    int value = (int)number;
+    if ((lua_Number)value != number)
+    {
+        luaL_error(L, "%s must be an integer", name);
+    }
+    return value;
+}
+
 static int GetIntegerField(lua_State* L, int table_index, const char* name, int fallback)
 {
     table_index = AbsIndex(L, table_index);
     lua_getfield(L, table_index, name);
-    int value = lua_isnil(L, -1) ? fallback : luaL_checkint(L, -1);
+    if (lua_isnil(L, -1))
+    {
+        lua_pop(L, 1);
+        return fallback;
+    }
+
+    int value = CheckInteger(L, -1, name);
     lua_pop(L, 1);
     return value;
 }
@@ -101,12 +127,22 @@ static b3Quat ToB3(const dmVMath::Quat& value)
 
 static b3Vec3 CheckVector3(lua_State* L, int index)
 {
-    return ToB3(*dmScript::CheckVector3(L, index));
+    b3Vec3 value = ToB3(*dmScript::CheckVector3(L, index));
+    if (!b3IsValidVec3(value))
+    {
+        luaL_error(L, "vector3 values must be finite numbers");
+    }
+    return value;
 }
 
 static b3Quat CheckQuat(lua_State* L, int index)
 {
-    return ToB3(*dmScript::CheckQuat(L, index));
+    b3Quat value = ToB3(*dmScript::CheckQuat(L, index));
+    if (!b3IsValidQuat(value))
+    {
+        luaL_error(L, "quaternion must contain finite numbers and have unit length");
+    }
+    return value;
 }
 
 static b3Vec3 GetVector3Field(lua_State* L, int table_index, const char* name, b3Vec3 fallback)
@@ -310,7 +346,7 @@ static b3BodyType GetBodyType(lua_State* L, int table_index)
     b3BodyType type = b3_staticBody;
     if (lua_isnumber(L, -1))
     {
-        int value = luaL_checkint(L, -1);
+        int value = CheckInteger(L, -1, "body type");
         if (value < (int)b3_staticBody || value > (int)b3_dynamicBody)
         {
             luaL_error(L, "body type must be BODY_TYPE_STATIC, BODY_TYPE_KINEMATIC, or BODY_TYPE_DYNAMIC");
@@ -356,6 +392,8 @@ static b3ShapeDef ReadShapeDef(lua_State* L, int table_index)
         luaL_error(L, "shape friction must be a finite non-negative number");
     if (!b3IsValidFloat(def.baseMaterial.restitution) || def.baseMaterial.restitution < 0.0f)
         luaL_error(L, "shape restitution must be a finite non-negative number");
+    if (!b3IsValidFloat(def.baseMaterial.rollingResistance) || def.baseMaterial.rollingResistance < 0.0f)
+        luaL_error(L, "shape rolling_resistance must be a finite non-negative number");
     return def;
 }
 
@@ -383,7 +421,12 @@ static int CreateWorld(lua_State* L)
         def.maximumLinearSpeed = GetNumberField(L, 1, "maximum_linear_speed", def.maximumLinearSpeed);
         def.enableSleep = GetBooleanField(L, 1, "enable_sleep", def.enableSleep);
         def.enableContinuous = GetBooleanField(L, 1, "enable_continuous", def.enableContinuous);
-        def.workerCount = (uint32_t)GetIntegerField(L, 1, "worker_count", (int)def.workerCount);
+        int worker_count = GetIntegerField(L, 1, "worker_count", (int)def.workerCount);
+        if (worker_count < 1 || worker_count > B3_MAX_WORKERS)
+        {
+            return luaL_error(L, "worker_count must be between 1 and %d", B3_MAX_WORKERS);
+        }
+        def.workerCount = (uint32_t)worker_count;
 #if defined(DM_PLATFORM_HTML5)
         if (def.workerCount > 1)
         {
@@ -391,6 +434,11 @@ static int CreateWorld(lua_State* L)
         }
 #endif
     }
+
+    if (!b3IsValidVec3(def.gravity)) return luaL_error(L, "world gravity must contain finite numbers");
+    if (def.restitutionThreshold < 0.0f) return luaL_error(L, "restitution_threshold must be non-negative");
+    if (def.hitEventThreshold < 0.0f) return luaL_error(L, "hit_event_threshold must be non-negative");
+    if (def.maximumLinearSpeed <= 0.0f) return luaL_error(L, "maximum_linear_speed must be positive");
 
     b3WorldId id = b3CreateWorld(&def);
     if (!b3World_IsValid(id))
@@ -412,8 +460,12 @@ static int Step(lua_State* L)
 {
     b3WorldId world = CheckWorld(L, 1);
     float dt = (float)luaL_checknumber(L, 2);
-    int substeps = luaL_optint(L, 3, 4);
-    if (dt < 0.0f) return luaL_error(L, "time step must be non-negative");
+    int substeps = 4;
+    if (!lua_isnoneornil(L, 3))
+    {
+        substeps = CheckInteger(L, 3, "substep count");
+    }
+    if (!b3IsValidFloat(dt) || dt < 0.0f) return luaL_error(L, "time step must be finite and non-negative");
     if (substeps < 1) return luaL_error(L, "substep count must be at least 1");
     b3World_Step(world, dt, substeps);
     return 0;
@@ -456,6 +508,14 @@ static int CreateBody(lua_State* L)
     def.motionLocks.angularX = GetBooleanField(L, 2, "lock_angular_x", def.motionLocks.angularX);
     def.motionLocks.angularY = GetBooleanField(L, 2, "lock_angular_y", def.motionLocks.angularY);
     def.motionLocks.angularZ = GetBooleanField(L, 2, "lock_angular_z", def.motionLocks.angularZ);
+
+    if (!b3IsValidPosition(def.position)) return luaL_error(L, "body position must contain finite numbers");
+    if (!b3IsValidQuat(def.rotation)) return luaL_error(L, "body rotation must be a finite unit quaternion");
+    if (!b3IsValidVec3(def.linearVelocity)) return luaL_error(L, "linear_velocity must contain finite numbers");
+    if (!b3IsValidVec3(def.angularVelocity)) return luaL_error(L, "angular_velocity must contain finite numbers");
+    if (def.linearDamping < 0.0f) return luaL_error(L, "linear_damping must be non-negative");
+    if (def.angularDamping < 0.0f) return luaL_error(L, "angular_damping must be non-negative");
+    if (def.sleepThreshold < 0.0f) return luaL_error(L, "sleep_threshold must be non-negative");
 
     b3BodyId id = b3CreateBody(world, &def);
     if (!b3Body_IsValid(id)) return luaL_error(L, "Box3D failed to create a body");
@@ -530,11 +590,11 @@ static int CreateCylinder(lua_State* L)
     float y_offset = GetNumberField(L, 2, "y_offset", 0.0f);
     int sides = GetIntegerField(L, 2, "sides", 16);
     if (height <= 0.0f || radius <= 0.0f) return luaL_error(L, "cylinder height and radius must be positive");
-    if (sides < 3) return luaL_error(L, "cylinder sides must be at least 3");
+    if (sides < 3 || sides > 32) return luaL_error(L, "cylinder sides must be between 3 and 32");
 
+    b3ShapeDef def = ReadShapeDef(L, 2);
     b3HullData* cylinder = b3CreateCylinder(height, radius, y_offset, sides);
     if (cylinder == 0) return luaL_error(L, "Box3D failed to create cylinder geometry");
-    b3ShapeDef def = ReadShapeDef(L, 2);
     b3ShapeId shape = b3CreateHullShape(body, &def, cylinder);
     b3DestroyHull(cylinder);
     PushCreatedShape(L, shape);

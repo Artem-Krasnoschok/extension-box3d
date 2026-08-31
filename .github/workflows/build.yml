@@ -11,6 +11,8 @@ permissions:
   contents: read
 
 env:
+  DEFOLD_VERSION: "1.13.1"
+  DEFOLD_BOB_SHA256: "8f2b1381fd4d0fb92816403cd0056cb7db5ad4083615be8dcc2d868fb4939938"
   BOX3D_CMAKE_FLAGS: >-
     -DBUILD_SHARED_LIBS=OFF
     -DBOX3D_DOUBLE_PRECISION=OFF
@@ -146,8 +148,38 @@ jobs:
           path: stage/wasm-web/*
           if-no-files-found: error
 
+  defold-integration:
+    needs: desktop
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [x86_64-linux, x86_64-win32]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: microsoft
+          java-version: "25"
+      - uses: actions/download-artifact@v4
+        with:
+          name: box3d-${{ matrix.platform }}
+          path: box3d/lib/${{ matrix.platform }}
+      - name: Download pinned Defold Bob
+        shell: bash
+        run: |
+          mkdir -p .cache
+          curl --fail --location --retry 3 \
+            "https://github.com/defold/defold/releases/download/${DEFOLD_VERSION}/bob.jar" \
+            --output .cache/bob.jar
+          echo "${DEFOLD_BOB_SHA256}  .cache/bob.jar" | sha256sum --check --strict
+      - name: Compile and link the Defold extension
+        run: >-
+          java -jar .cache/bob.jar --archive --platform ${{ matrix.platform }}
+          --variant debug --bundle-output build/defold-bundle-${{ matrix.platform }} build bundle
+
   package:
-    needs: [desktop, macos, android, web]
+    needs: [desktop, macos, android, web, defold-integration]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4

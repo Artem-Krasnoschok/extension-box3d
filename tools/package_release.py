@@ -41,6 +41,7 @@ def main() -> None:
             "box3d/box3d.script_api",
             "box3d/include",
             "box3d/src",
+            "docs",
             "example",
             "game.project",
             "README.md",
