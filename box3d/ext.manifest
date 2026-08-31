@@ -1,0 +1,27 @@
+name: "Box3DExtension"
+
+platforms:
+    x86_64-win32:
+        context:
+            libs: ["box3d"]
+    x86_64-linux:
+        context:
+            libs: ["box3d"]
+    arm64-linux:
+        context:
+            libs: ["box3d"]
+    x86_64-osx:
+        context:
+            libs: ["box3d"]
+    arm64-osx:
+        context:
+            libs: ["box3d"]
+    armv7-android:
+        context:
+            libs: ["box3d"]
+    arm64-android:
+        context:
+            libs: ["box3d"]
+    wasm-web:
+        context:
+            libs: ["box3d"]

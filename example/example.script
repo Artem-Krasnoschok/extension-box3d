@@ -1,0 +1,33 @@
+function init(self)
+    self.world = box3d.create_world({ gravity = vmath.vector3(0, -9.81, 0) })
+
+    local ground = box3d.create_body(self.world, {
+        type = box3d.BODY_TYPE_STATIC,
+        position = vmath.vector3(0, -0.5, 0),
+    })
+    box3d.create_box(ground, {
+        half_extents = vmath.vector3(10, 0.5, 10),
+        friction = 0.8,
+    })
+
+    self.body = box3d.create_body(self.world, {
+        type = box3d.BODY_TYPE_DYNAMIC,
+        position = vmath.vector3(0, 4, 0),
+    })
+    box3d.create_box(self.body, {
+        half_extents = vmath.vector3(0.5, 0.5, 0.5),
+        density = 1.0,
+        friction = 0.5,
+    })
+end
+
+function update(self, dt)
+    box3d.step(self.world, dt, 4)
+    local position, rotation = box3d.get_transform(self.body)
+    go.set_position(position)
+    go.set_rotation(rotation)
+end
+
+function final(self)
+    box3d.destroy_world(self.world)
+end

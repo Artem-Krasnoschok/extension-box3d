@@ -1,0 +1,193 @@
+name: Build and package
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  BOX3D_CMAKE_FLAGS: >-
+    -DBUILD_SHARED_LIBS=OFF
+    -DBOX3D_DOUBLE_PRECISION=OFF
+    -DBOX3D_SAMPLES=OFF
+    -DBOX3D_BENCHMARKS=OFF
+    -DBOX3D_DOCS=OFF
+    -DBOX3D_UNIT_TESTS=OFF
+    -DBOX3D_PROFILE=OFF
+    -DBOX3D_VALIDATE=OFF
+
+jobs:
+  desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: x86_64-win32
+            os: windows-2022
+          - platform: x86_64-linux
+            os: ubuntu-24.04
+          - platform: arm64-linux
+            os: ubuntu-24.04-arm
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python tools/fetch_box3d.py --output .cache/box3d
+      - if: runner.os == 'Windows'
+        run: >-
+          cmake -S . -B build/box3d -A x64
+          -DBOX3D_SOURCE_DIR=${{ github.workspace }}/.cache/box3d
+          -DEXTENSION_BOX3D_BUILD_TESTS=ON
+          ${{ env.BOX3D_CMAKE_FLAGS }}
+      - if: runner.os != 'Windows'
+        run: >-
+          cmake -S . -B build/box3d -G Ninja -DCMAKE_BUILD_TYPE=Release
+          -DBOX3D_SOURCE_DIR=${{ github.workspace }}/.cache/box3d
+          -DEXTENSION_BOX3D_BUILD_TESTS=ON
+          ${{ env.BOX3D_CMAKE_FLAGS }}
+      - run: cmake --build build/box3d --config Release --parallel 2
+      - run: ctest --test-dir build/box3d -C Release --output-on-failure
+      - run: python tools/stage_library.py --build-dir build/box3d --platform ${{ matrix.platform }} --output stage
+      - uses: actions/upload-artifact@v4
+        with:
+          name: box3d-${{ matrix.platform }}
+          path: stage/${{ matrix.platform }}/*
+          if-no-files-found: error
+
+  macos:
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [x86_64-osx, arm64-osx]
+        include:
+          - platform: x86_64-osx
+            architecture: x86_64
+          - platform: arm64-osx
+            architecture: arm64
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python tools/fetch_box3d.py --output .cache/box3d
+      - run: >-
+          cmake -S . -B build/box3d -G Ninja -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_OSX_ARCHITECTURES=${{ matrix.architecture }}
+          -DBOX3D_SOURCE_DIR=${{ github.workspace }}/.cache/box3d
+          ${{ env.BOX3D_CMAKE_FLAGS }}
+      - run: cmake --build build/box3d --target box3d --parallel 2
+      - run: python tools/stage_library.py --build-dir build/box3d --platform ${{ matrix.platform }} --output stage
+      - uses: actions/upload-artifact@v4
+        with:
+          name: box3d-${{ matrix.platform }}
+          path: stage/${{ matrix.platform }}/*
+          if-no-files-found: error
+
+  android:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: armv7-android
+            abi: armeabi-v7a
+          - platform: arm64-android
+            abi: arm64-v8a
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python tools/fetch_box3d.py --output .cache/box3d
+      - run: >-
+          cmake -S . -B build/box3d -G Ninja -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_TOOLCHAIN_FILE=${ANDROID_NDK_LATEST_HOME}/build/cmake/android.toolchain.cmake
+          -DANDROID_ABI=${{ matrix.abi }} -DANDROID_PLATFORM=android-21
+          -DBOX3D_SOURCE_DIR=${{ github.workspace }}/.cache/box3d
+          ${{ env.BOX3D_CMAKE_FLAGS }}
+      - run: cmake --build build/box3d --target box3d --parallel 2
+      - run: python tools/stage_library.py --build-dir build/box3d --platform ${{ matrix.platform }} --output stage
+      - uses: actions/upload-artifact@v4
+        with:
+          name: box3d-${{ matrix.platform }}
+          path: stage/${{ matrix.platform }}/*
+          if-no-files-found: error
+
+  web:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: 4.0.10
+          actions-cache-folder: emsdk-cache
+      - run: python tools/fetch_box3d.py --output .cache/box3d
+      - run: >-
+          emcmake cmake -S . -B build/box3d -G Ninja -DCMAKE_BUILD_TYPE=Release
+          -DBOX3D_SOURCE_DIR=${{ github.workspace }}/.cache/box3d
+          -DBOX3D_DISABLE_SIMD=ON
+          ${{ env.BOX3D_CMAKE_FLAGS }}
+      - run: cmake --build build/box3d --target box3d --parallel 2
+      - run: python tools/stage_library.py --build-dir build/box3d --platform wasm-web --output stage
+      - uses: actions/upload-artifact@v4
+        with:
+          name: box3d-wasm-web
+          path: stage/wasm-web/*
+          if-no-files-found: error
+
+  package:
+    needs: [desktop, macos, android, web]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: box3d-*
+          path: artifacts
+      - name: Select package version
+        id: version
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            echo "value=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=dev-${GITHUB_SHA::8}" >> "$GITHUB_OUTPUT"
+          fi
+      - run: >-
+          python tools/package_release.py --artifacts artifacts --output dist
+          --version ${{ steps.version.outputs.value }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: extension-box3d-package
+          path: dist/*
+          if-no-files-found: error
+
+  publish:
+    if: github.ref_type == 'tag'
+    needs: package
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: extension-box3d-package
+          path: dist
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" --generate-notes

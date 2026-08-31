@@ -1,0 +1,16 @@
+[project]
+title = Box3D Extension
+version = 0.1.0
+
+[bootstrap]
+main_collection = /example/example.collectionc
+
+[display]
+width = 960
+height = 540
+
+[input]
+game_binding = /example/game.input_bindingc
+
+[library]
+include_dirs = box3d

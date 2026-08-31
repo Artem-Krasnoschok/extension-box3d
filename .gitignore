@@ -1,0 +1,7 @@
+/build/
+/dist/
+/.cache/
+/box3d/lib/
+__pycache__/
+*.pyc
+*.zip
