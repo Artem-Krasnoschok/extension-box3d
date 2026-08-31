@@ -421,12 +421,17 @@ static int CreateWorld(lua_State* L)
         def.maximumLinearSpeed = GetNumberField(L, 1, "maximum_linear_speed", def.maximumLinearSpeed);
         def.enableSleep = GetBooleanField(L, 1, "enable_sleep", def.enableSleep);
         def.enableContinuous = GetBooleanField(L, 1, "enable_continuous", def.enableContinuous);
-        int worker_count = GetIntegerField(L, 1, "worker_count", (int)def.workerCount);
-        if (worker_count < 1 || worker_count > B3_MAX_WORKERS)
+        lua_getfield(L, 1, "worker_count");
+        if (!lua_isnil(L, -1))
         {
-            return luaL_error(L, "worker_count must be between 1 and %d", B3_MAX_WORKERS);
+            int worker_count = CheckInteger(L, -1, "worker_count");
+            if (worker_count < 1 || worker_count > B3_MAX_WORKERS)
+            {
+                return luaL_error(L, "worker_count must be between 1 and %d", B3_MAX_WORKERS);
+            }
+            def.workerCount = (uint32_t)worker_count;
         }
-        def.workerCount = (uint32_t)worker_count;
+        lua_pop(L, 1);
 #if defined(DM_PLATFORM_HTML5)
         if (def.workerCount > 1)
         {
