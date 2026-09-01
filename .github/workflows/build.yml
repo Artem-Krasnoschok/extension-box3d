@@ -176,7 +176,9 @@ jobs:
       - name: Compile and link the Defold extension
         run: >-
           java -jar .cache/bob.jar --archive --platform ${{ matrix.platform }}
-          --variant debug --bundle-output build/defold-bundle-${{ matrix.platform }} build bundle
+          --variant debug
+          --bundle-output ${{ runner.temp }}/defold-bundle-${{ matrix.platform }}
+          build bundle
 
   package:
     needs: [desktop, macos, android, web, defold-integration]
