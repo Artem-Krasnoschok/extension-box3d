@@ -5,7 +5,7 @@ A clean-room Defold native extension for the experimental 3D [Box3D](https://git
 The repository contains a generic Lua binding, pinned upstream headers, a reproducible native-library build, and release packaging for eight Defold targets. It does not contain game-specific destruction rules, gameplay code, or code copied from another Defold project.
 
 > [!IMPORTANT]
-> Box3D 3D currently reports version `0.1.0` and its `main` API may change. This extension pins one exact upstream commit so every platform uses the same source.
+> Box3D 3D currently reports version `0.1.1` and its `main` API may change. This extension pins one exact upstream commit so every platform uses the same source.
 
 ## Status
 
@@ -32,10 +32,10 @@ Use a release asset, not the source archive from the repository. The release ZIP
 Add a released archive URL to **Project > Fetch Libraries** in `game.project`:
 
 ```text
-https://github.com/Artem-Krasnoschok/extension-box3d/releases/download/v0.1.0/extension-box3d-0.1.0.zip
+https://github.com/Artem-Krasnoschok/extension-box3d/releases/download/v0.1.1/extension-box3d-0.1.1.zip
 ```
 
-Then fetch libraries and build the project. Replace `v0.1.0` with the release you select.
+Then fetch libraries and build the project. Replace `v0.1.1` with the release you select.
 
 ## Minimal example
 

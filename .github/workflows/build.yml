@@ -24,6 +24,15 @@ env:
     -DBOX3D_VALIDATE=OFF
 
 jobs:
+  package-format:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m unittest discover -s tests -p "test_*.py"
+
   desktop:
     strategy:
       fail-fast: false
@@ -181,7 +190,7 @@ jobs:
           build bundle
 
   package:
-    needs: [desktop, macos, android, web, defold-integration]
+    needs: [package-format, desktop, macos, android, web, defold-integration]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
